@@ -23,23 +23,24 @@ defmodule OLED.Display.Impl.SSD1306 do
   @ssd1306_setdisplayclockdiv 0xD5
   @ssd1306_setprecharge 0xD9
   @ssd1306_setmultiplex 0xA8
-  # @ssd1306_setlowcolumn 0x00
-  # @ssd1306_sethighcolumn 0x10
+  @ssd1306_setlowcolumn 0x0
+  @ssd1306_sethighcolumn 0x10
   @ssd1306_setstartline 0x40
   @ssd1306_memorymode 0x20
   @ssd1306_columnaddr 0x21
   @ssd1306_pageaddr 0x22
-  # @ssd1306_comscaninc 0xC0
+  @ssd1306_comscaninc 0xC0
   @ssd1306_comscandec 0xC8
   @ssd1306_segremap 0xA0
   @ssd1306_chargepump 0x8D
-  @ssd1306_deactivate_scroll 0x2E
+  # @ssd1306_deactivate_scroll 0x2E
   # @ssd1306_activate_scroll 0x2F
 
   @default_config [
     width: 128,
     height: 64,
-    external_vcc: false
+    external_vcc: false,
+    offset: 0x0
   ]
 
   @required_config [
@@ -54,7 +55,8 @@ defmodule OLED.Display.Impl.SSD1306 do
             height: nil,
             buffer: nil,
             dev: nil,
-            external_vcc: nil
+            external_vcc: nil,
+            offset: nil
 
   defdelegate put_pixel(state, x, y, opts), to: Draw
   defdelegate circle(state, x0, y0, r, opts), to: Draw
@@ -82,7 +84,8 @@ defmodule OLED.Display.Impl.SSD1306 do
         width: config[:width],
         height: config[:height],
         dev: dev,
-        external_vcc: config[:external_vcc]
+        external_vcc: config[:external_vcc],
+        offset: config[:offset]
       }
 
       state
@@ -104,7 +107,7 @@ defmodule OLED.Display.Impl.SSD1306 do
     |> reset()
     |> command([@ssd1306_displayoff])
     |> command([@ssd1306_setdisplayclockdiv, 0x80])
-    |> command([@ssd1306_setmultiplex, state.height - 1])
+    |> command([@ssd1306_setmultiplex, 0x3F])
     |> command([@ssd1306_setdisplayoffset, 0x0])
     |> command([@ssd1306_setstartline ||| 0x0])
     |> set_chargepump()
@@ -117,7 +120,6 @@ defmodule OLED.Display.Impl.SSD1306 do
     |> command([@ssd1306_setvcomdetect, 0x40])
     |> command([@ssd1306_displayallon_resume])
     |> command([@ssd1306_normaldisplay])
-    |> command([@ssd1306_deactivate_scroll])
     |> command([@ssd1306_displayon])
   end
 
@@ -148,17 +150,23 @@ defmodule OLED.Display.Impl.SSD1306 do
 
   def display_frame(%__MODULE__{} = state, data, opts) do
     memory_mode = get_memory_mode(opts[:memory_mode] || :horizontal)
-
     if byte_size(data) == state.width * state.height / 8 do
       state
-      |> command([@ssd1306_memorymode, memory_mode])
       |> command([@ssd1306_pageaddr, 0, trunc(state.height / 8 - 1)])
-      |> command([@ssd1306_columnaddr, 0, state.width - 1])
+      |> command([@ssd1306_columnaddr, 2, state.width - 1])
       |> transfer(data)
       |> command([@ssd1306_memorymode, 0])
     else
       {:error, :invalid_data_size}
     end
+  end
+
+  defp display_page_loop(%__MODULE__{} = state, data, opts) do
+
+  end
+
+  defp display_row_loop(%__MODULE__{} = state, data, opts) do
+
   end
 
   def clear_buffer(%__MODULE__{width: w, height: h} = state, pixel_state)
@@ -183,8 +191,8 @@ defmodule OLED.Display.Impl.SSD1306 do
   def get_dimensions(%__MODULE__{width: width, height: height}),
     do: {:ok, width, height}
 
-  defp set_compins(%__MODULE__{height: height} = state) when height > 32,
-    do: command(state, [@ssd1306_setcompins, 0x12])
+  #defp set_compins(%__MODULE__{height: height} = state) when height > 32,
+  #  do: command(state, [@ssd1306_setcompins, 0x12])
 
   defp set_compins(%__MODULE__{} = state),
     do: command(state, [@ssd1306_setcompins, 0x02])
@@ -192,20 +200,20 @@ defmodule OLED.Display.Impl.SSD1306 do
   defp set_compins(error),
     do: error
 
-  defp set_contrast(%__MODULE__{width: 128, height: 32} = state),
-    do: command(state, [@ssd1306_setcontrast, 0x8F])
+#  defp set_contrast(%__MODULE__{width: 128, height: 32} = state),
+#    do: command(state, [@ssd1306_setcontrast, 0x8F])
 
   defp set_contrast(%__MODULE__{width: 128, height: 64, external_vcc: true} = state),
-    do: command(state, [@ssd1306_setcontrast, 0x9F])
-
-  defp set_contrast(%__MODULE__{width: 128, height: 64, external_vcc: false} = state),
-    do: command(state, [@ssd1306_setcontrast, 0xCF])
-
-  defp set_contrast(%__MODULE__{width: 96, height: 16, external_vcc: true} = state),
     do: command(state, [@ssd1306_setcontrast, 0x10])
 
-  defp set_contrast(%__MODULE__{width: 96, height: 16, external_vcc: false} = state),
+  defp set_contrast(%__MODULE__{width: 128, height: 64, external_vcc: false} = state),
     do: command(state, [@ssd1306_setcontrast, 0xAF])
+
+#  defp set_contrast(%__MODULE__{width: 96, height: 16, external_vcc: true} = state),
+#    do: command(state, [@ssd1306_setcontrast, 0x10])
+
+#  defp set_contrast(%__MODULE__{width: 96, height: 16, external_vcc: false} = state),
+#    do: command(state, [@ssd1306_setcontrast, 0xAF])
 
   defp set_contrast(error),
     do: error
@@ -267,7 +275,4 @@ defmodule OLED.Display.Impl.SSD1306 do
   def command(error, _cmd),
     do: error
 
-  defp get_memory_mode(:horizontal), do: 0x00
-  defp get_memory_mode(:vertical), do: 0x01
-  defp get_memory_mode(:page_addr), do: 0x02
 end
