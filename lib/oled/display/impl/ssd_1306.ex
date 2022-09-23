@@ -275,4 +275,7 @@ defmodule OLED.Display.Impl.SSD1306 do
   def command(error, _cmd),
     do: error
 
+  defp get_memory_mode(:horizontal), do: 0x00
+  defp get_memory_mode(:vertical), do: 0x01
+  defp get_memory_mode(:page_addr), do: 0x02
 end
